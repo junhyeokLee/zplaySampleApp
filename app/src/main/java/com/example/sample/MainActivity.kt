@@ -2,7 +2,6 @@ package com.example.sample
 
 import android.Manifest
 import android.os.Bundle
-import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -49,9 +48,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.sample.pose.HeroPoseLandmarks
 import com.example.sample.pose.PoseFrame
-import com.example.sample.pose.PoseLandmarkerHelper
+import com.example.sample.pose.PoseViewModel
 import com.example.sample.ui.theme.SampleTheme
 import java.util.concurrent.Executors
 import kotlin.math.max
@@ -98,26 +98,13 @@ private fun HeroChallengeApp() {
 
 @Composable
 private fun PoseCameraScreen() {
-    val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
+    val viewModel: PoseViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val cameraExecutor = remember { Executors.newSingleThreadExecutor() }
-    var poseFrame by remember { mutableStateOf(PoseFrame()) }
-    var errorMessage by remember { mutableStateOf<String?>(null) }
-
-    val poseHelper = remember {
-        PoseLandmarkerHelper(
-            context = context,
-            onResult = { poseFrame = it },
-            onError = {
-                Log.e("HeroPose", it)
-                errorMessage = it
-            }
-        )
-    }
 
     DisposableEffect(Unit) {
         onDispose {
-            poseHelper.close()
             cameraExecutor.shutdown()
         }
     }
@@ -144,7 +131,7 @@ private fun PoseCameraScreen() {
                             .build()
                             .also { analysis ->
                                 analysis.setAnalyzer(cameraExecutor) { imageProxy ->
-                                    poseHelper.detectLiveStream(imageProxy)
+                                    viewModel.processCameraFrame(imageProxy)
                                 }
                             }
 
@@ -163,14 +150,14 @@ private fun PoseCameraScreen() {
         )
 
         PoseOverlay(
-            poseFrame = poseFrame,
+            poseFrame = uiState.poseFrame,
             mirrorHorizontally = true,
             modifier = Modifier.fillMaxSize(),
         )
 
         TopHud(
-            detectedCount = poseFrame.poses.size,
-            errorMessage = errorMessage,
+            detectedCount = uiState.poseFrame.poses.size,
+            errorMessage = uiState.errorMessage,
             modifier = Modifier
                 .align(Alignment.TopCenter)
                 .fillMaxWidth()
