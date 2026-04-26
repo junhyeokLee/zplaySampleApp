@@ -1,100 +1,62 @@
-# ZPLAY Hero Challenge Android Sample
+# ZPLAY Android Sample
 
-Android sample app for the ZPLAY Hero Challenge hiring task.
+## 빌드 방법
 
-The app uses CameraX and MediaPipe Pose Landmarker as an Android alternative to iOS Vision body pose detection. It runs pose detection on the live front-camera stream, tracks up to 4 people at the same time, and draws a real-time skeleton overlay using 19 major body landmarks.
-
-## Tech Stack
-
-- Kotlin
-- Jetpack Compose
-- CameraX
-- MediaPipe Tasks Vision Pose Landmarker
-- MVVM + Repository
-- ViewModel + StateFlow
-- On-device model: `pose_landmarker_lite.task`
-
-## Features
-
-- Real-time front-camera pose detection
-- Up to 4 simultaneous people with `setNumPoses(4)`
-- 19 Vision-like key landmarks selected from MediaPipe's 33 pose landmarks
-- Per-person colored skeleton overlay
-- Camera permission handling
-
-## Why MediaPipe?
-
-I selected MediaPipe Pose Landmarker instead of raw TensorFlow Lite / MoveNet MultiPose because MediaPipe is conceptually closest to Apple's iOS Vision body pose API.
-
-Both iOS Vision and MediaPipe expose a high-level pose detection pipeline:
-
-```text
-camera frame -> body landmarks -> confidence scores -> skeleton overlay
-```
-
-This keeps the Android architecture close to the existing iOS implementation. The app does not need to manually implement model output tensor decoding, multi-person landmark grouping, or pose tracking logic.
-
-MediaPipe Pose Landmarker also supports live stream mode and `setNumPoses(4)`, which matches the requirement to detect up to 4 people simultaneously. MediaPipe returns 33 pose landmarks; this sample maps them to 19 major landmarks to match the iOS Vision-style requirement.
-
-## Architecture
-
-```text
-MainActivity / Compose UI
-        |
-PoseViewModel
-        |
-PoseRepository
-        |
-PoseLandmarkerHelper
-        |
-CameraFramePreprocessor
-        |
-CameraX ImageAnalysis ImageProxy
-```
-
-- `MainActivity`: owns the Android screen and camera permission UI.
-- `PoseViewModel`: exposes `StateFlow<PoseUiState>` and survives configuration changes.
-- `PoseRepository`: owns the pose detection pipeline state.
-- `PoseLandmarkerHelper`: configures MediaPipe Pose Landmarker in `LIVE_STREAM` mode.
-- `CameraFramePreprocessor`: converts `ImageProxy -> Bitmap -> MPImage`.
-
-For a raw TFLite / MoveNet implementation, `CameraFramePreprocessor` is the place where the `ImageProxy -> Bitmap -> resized/normalized tensor` preprocessing pipeline would feed a TFLite interpreter. In this MediaPipe implementation, the final input object is `MPImage`, because MediaPipe Tasks handles model-specific tensor preparation internally.
-
-## Build
+프로젝트 루트에서 아래 명령어를 실행합니다.
 
 ```bash
 ./gradlew assembleDebug
 ```
 
-The debug APK will be generated at:
+빌드가 완료되면 APK는 아래 경로에 생성됩니다.
 
 ```text
 app/build/outputs/apk/debug/app-debug.apk
 ```
 
-## Run
+## 설치 및 실행
 
-Install on a connected Android device:
+연결된 안드로이드 기기에 설치하고 실행하려면 아래 명령어를 순서대로 실행합니다.
 
 ```bash
 ./gradlew installDebug
+adb shell am start -n com.example.sample/.MainActivity
 ```
 
-Open the app and allow camera permission. The app uses the front camera and overlays skeleton lines and landmark dots over the live preview.
+설치 후 앱이 자동으로 실행되도록 위 명령어를 함께 사용합니다.
 
-## Implementation Notes
+앱 실행 후 카메라 권한을 허용하면 후면 카메라 화면에서 4인 동시 동작인식과 스켈레톤 오버레이를 확인할 수 있습니다.
 
-MediaPipe Pose Landmarker returns 33 pose landmarks. This sample maps those results to 19 major landmarks to match the iOS Vision-style requirement:
+## 역할 설명
 
-- nose
-- left/right eye
-- left/right ear
-- left/right shoulder
-- left/right elbow
-- left/right wrist
-- left/right hip
-- left/right knee
-- left/right ankle
-- left/right foot index
+- `data/model`  
+  포즈 관련 데이터 클래스
 
-The model file is included under `app/src/main/assets/pose_landmarker_lite.task`, so no runtime network access is required.
+- `data/processor`  
+  카메라 프레임 전처리, MediaPipe 추론 처리
+
+- `data/repository`  
+  추론 결과를 UI 상태 흐름으로 연결
+
+- `domain`  
+  스켈레톤 smoothing, 4개 레인 슬롯 배정 로직
+
+- `presentation/viewmodel`  
+  ViewModel, UI 상태 관리
+
+- `presentation/screen`  
+  화면 단위 Compose 구성
+
+- `presentation/component`  
+  카메라 프리뷰, 오버레이, 공통 UI 컴포넌트
+
+## 구현 메모
+
+- MediaPipe Pose Landmarker를 사용하여 최대 4인 동시 포즈 인식을 수행합니다.
+- `setNumPoses(4)` 설정으로 최대 4명까지 인식하도록 구성했습니다.
+- 후면 카메라 기준으로 동작하며, 가로 모드에 최적화된 4개 레인 UI를 제공합니다.
+- 19개 주요 랜드마크를 기준으로 실시간 스켈레톤 오버레이를 표시합니다.
+- CameraX `ImageAnalysis` 기반으로 프레임을 처리합니다.
+- RGBA 프레임을 사용하여 불필요한 JPEG round-trip을 줄였습니다.
+- `pose_landmarker_full.task` 모델을 사용하여 정확도 중심으로 구성했습니다.
+- adaptive smoothing과 lane hysteresis를 적용하여 스켈레톤 움직임이 보다 자연스럽게 보이도록 보정했습니다.
